@@ -1,0 +1,7 @@
+.terraform
+.terraform.*
+terraform.*
+credentials
+main.zip
+bin/
+go.sum
