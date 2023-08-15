@@ -8,9 +8,14 @@ terraform {
 }
 
 provider "aws" {
-  region                   = "eu-central-1"
+  region                   = var.region
   shared_credentials_files = ["./credentials"]
   profile                  = "default"
+}
+
+variable "region" {
+  description = "The AWS region"
+  default     = "eu-central-1"
 }
 
 resource "aws_iam_role" "lambda_role" {
@@ -90,3 +95,7 @@ resource "aws_lambda_permission" "apigw_lambda_permission" {
   source_arn    = "${aws_apigatewayv2_stage.default_stage.execution_arn}/*/*"
 }
 
+output "api_gateway_invoke_url" {
+  value       = "https://${aws_apigatewayv2_api.example_api.id}.execute-api.${var.region}.amazonaws.com/"
+  description = "The URL to invoke the API Gateway"
+}
