@@ -1,4 +1,4 @@
-module aws-lambda-api-gateway-go-terraform
+module aws-lambda-cloudwatch-api-gateway-go-terraform
 
 go 1.21.0
 

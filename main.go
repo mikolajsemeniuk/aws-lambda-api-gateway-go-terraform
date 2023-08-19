@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
 func main() {
@@ -25,6 +27,10 @@ func handler(c context.Context, r events.APIGatewayProxyRequest) (events.APIGate
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
+	}
+
+	if lc, ok := lambdacontext.FromContext(c); ok {
+		fmt.Println("RequestID: ", lc.AwsRequestID, ", Lambda triggered!")
 	}
 
 	return events.APIGatewayProxyResponse{

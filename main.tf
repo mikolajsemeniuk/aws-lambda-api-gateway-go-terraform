@@ -18,25 +18,9 @@ variable "region" {
   default     = "eu-central-1"
 }
 
-resource "aws_iam_role" "lambda_role" {
-  name = "aws_go_lambda_role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-  })
-}
-
-data "archive_file" "lambda_function" {
-  type        = "zip"
-  source_dir  = "./bin"
-  output_path = "main.zip"
+variable "retention" {
+  description = "retention of cloudwatch logs in days"
+  default     = 7
 }
 
 resource "aws_lambda_function" "example_lambda" {
@@ -54,12 +38,43 @@ resource "aws_lambda_function" "example_lambda" {
   }
 }
 
+resource "aws_iam_role" "lambda_role" {
+  name = "aws_go_lambda_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_cloudwatch_logs_policy" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_cloudwatch_log_group" "lambda_log_group" {
+  name              = "/aws/lambda/aws_go_lambda"
+  retention_in_days = var.retention
+}
+
+data "archive_file" "lambda_function" {
+  type        = "zip"
+  source_dir  = "./bin"
+  output_path = "main.zip"
+}
+
 resource "aws_apigatewayv2_api" "example_api" {
   name          = "example-api-gateway"
   protocol_type = "HTTP"
 }
 
-resource "aws_apigatewayv2_integration" "example_lambda_integration" {
+resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id                 = aws_apigatewayv2_api.example_api.id
   integration_type       = "AWS_PROXY"
   integration_method     = "POST"
@@ -70,13 +85,18 @@ resource "aws_apigatewayv2_integration" "example_lambda_integration" {
 resource "aws_apigatewayv2_route" "example_route" {
   api_id    = aws_apigatewayv2_api.example_api.id
   route_key = "GET /lambda"
-  target    = "integrations/${aws_apigatewayv2_integration.example_lambda_integration.id}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
 resource "aws_apigatewayv2_stage" "default_stage" {
   api_id      = aws_apigatewayv2_api.example_api.id
   name        = "$default"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway_log_group.arn
+    format          = "$context.identity.sourceIp - - [$context.requestTime] \"$context.httpMethod $context.routeKey $context.protocol\" $context.status $context.responseLength $context.requestId"
+  }
 
   default_route_settings {
     logging_level = "INFO"
@@ -94,6 +114,53 @@ resource "aws_lambda_permission" "apigw_lambda_permission" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_stage.default_stage.execution_arn}/*/*"
 }
+
+resource "aws_iam_role" "apigateway_cloudwatch_logs_role" {
+  name = "apigateway-cloudwatch-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "apigateway_cloudwatch_logs_policy" {
+  role       = aws_iam_role.apigateway_cloudwatch_logs_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+resource "aws_cloudwatch_log_group" "api_gateway_log_group" {
+  name              = "/aws/apigateway/${aws_apigatewayv2_api.example_api.name}"
+  retention_in_days = var.retention
+}
+
+# resource "aws_iam_role_policy" "apigateway_cloudwatch_logs_policy" {
+#   name = "apigateway-cloudwatch-logs-policy"
+#   role = aws_iam_role.apigateway_cloudwatch_logs_role.id
+
+#   policy = jsonencode({
+#     Version = "2012-10-17",
+#     Statement = [{
+#       Action = [
+#         "logs:CreateLogGroup",
+#         "logs:CreateLogStream",
+#         "logs:DescribeLogGroups",
+#         "logs:DescribeLogStreams",
+#         "logs:PutLogEvents",
+#         "logs:GetLogEvents",
+#         "logs:FilterLogEvents"
+#       ],
+#       Effect   = "Allow",
+#       Resource = "*"
+#     }]
+#   })
+# }
 
 output "api_gateway_invoke_url" {
   value       = "https://${aws_apigatewayv2_api.example_api.id}.execute-api.${var.region}.amazonaws.com/"
