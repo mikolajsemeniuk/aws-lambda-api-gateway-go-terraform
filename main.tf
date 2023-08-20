@@ -115,8 +115,8 @@ resource "aws_lambda_permission" "apigw_lambda_permission" {
   source_arn    = "${aws_apigatewayv2_stage.default_stage.execution_arn}/*/*"
 }
 
-resource "aws_iam_role" "apigateway_cloudwatch_logs_role" {
-  name = "apigateway-cloudwatch-logs-role"
+resource "aws_iam_role" "apigateway_role" {
+  name = "apigateway-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -131,7 +131,7 @@ resource "aws_iam_role" "apigateway_cloudwatch_logs_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "apigateway_cloudwatch_logs_policy" {
-  role       = aws_iam_role.apigateway_cloudwatch_logs_role.name
+  role       = aws_iam_role.apigateway_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
 }
 
